@@ -40,6 +40,9 @@ model Unit {
   pengaduan  Pengaduan[]
 
   @@unique([towerId, nomor])
+  @@index([status])
+  @@index([towerId])
+  @@index([lantai])
 }
 
 model Penghuni {
@@ -58,6 +61,9 @@ model Penghuni {
   berkasLengkap Boolean           @default(false)
   anggota       AnggotaKeluarga[]
   perjanjian    PerjanjianSewa[]
+
+  @@index([nama])
+  @@index([berkasLengkap])
 }
 
 model AnggotaKeluarga {
@@ -68,6 +74,8 @@ model AnggotaKeluarga {
   nama       String
   hubungan   String
   usia       Int?
+
+  @@index([penghuniId])
 }
 
 model PerjanjianSewa {
@@ -82,6 +90,10 @@ model PerjanjianSewa {
   tarifBulanan    Int
   status          String     @default("AKTIF") // "AKTIF" | "BERAKHIR" | "DIBATALKAN"
   tagihan         Tagihan[]
+
+  @@index([status])
+  @@index([unitId])
+  @@index([penghuniId])
 }
 
 model Tagihan {
@@ -96,6 +108,10 @@ model Tagihan {
   pembayaran   Pembayaran[]
 
   @@unique([perjanjianId, periodeBulan, periodeTahun])
+  @@index([status])
+  @@index([status, jatuhTempo])
+  @@index([perjanjianId])
+  @@index([periodeTahun, periodeBulan])
 }
 
 model Pembayaran {
@@ -108,6 +124,9 @@ model Pembayaran {
   dicatatOleh  String // User.id
   tanggalSetor DateTime? // penyetoran ke kas daerah
   nomorSetoran String?
+
+  @@index([tagihanId])
+  @@index([tanggalBayar])
 }
 
 model Pengaduan {
@@ -126,6 +145,12 @@ model Pengaduan {
   petugasId      String?
   tindakan       String?
   tanggalSelesai DateTime?
+
+  @@index([status])
+  @@index([unitId])
+  @@index([batasWaktu])
+  @@index([kategori])
+  @@index([tanggalLapor])
 }
 
 model LogAudit {
@@ -137,4 +162,8 @@ model LogAudit {
   sebelum   String? // JSON
   sesudah   String? // JSON
   waktu     DateTime @default(now())
+
+  @@index([entitas, entitasId])
+  @@index([waktu])
+  @@index([userId])
 }

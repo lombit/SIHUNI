@@ -76,53 +76,56 @@ export default async function TagihanPage({ searchParams }: TagihanPageProps) {
     ];
   }
 
-  // Hitung total dan agregat keuangan untuk filter saat ini
-  const [totalFiltered, agregatTagihan, semuaPembayaranFilter, totalLunasCount, totalTerlambatCount] =
-    await Promise.all([
-      db.tagihan.count({ where }),
-      db.tagihan.aggregate({
-        where,
-        _sum: { jumlah: true },
-      }),
-      db.pembayaran.findMany({
-        where: {
-          tagihan: where,
+  // Hitung total, agregat keuangan SQL, dan ambil data paginated dalam 1 round-trip paralel
+  const [
+    totalFiltered,
+    agregatTagihan,
+    agregatPembayaran,
+    totalLunasCount,
+    totalTerlambatCount,
+    tagihanList,
+  ] = await Promise.all([
+    db.tagihan.count({ where }),
+    db.tagihan.aggregate({
+      where,
+      _sum: { jumlah: true },
+    }),
+    db.pembayaran.aggregate({
+      where: {
+        tagihan: where,
+      },
+      _sum: { jumlah: true },
+    }),
+    db.tagihan.count({
+      where: { ...where, status: "LUNAS" },
+    }),
+    db.tagihan.count({
+      where: { ...where, status: "TERLAMBAT" },
+    }),
+    db.tagihan.findMany({
+      where,
+      include: {
+        perjanjian: {
+          include: {
+            unit: { include: { tower: true } },
+            penghuni: true,
+          },
         },
-        select: { jumlah: true },
-      }),
-      db.tagihan.count({
-        where: { ...where, status: "LUNAS" },
-      }),
-      db.tagihan.count({
-        where: { ...where, status: "TERLAMBAT" },
-      }),
-    ]);
+        pembayaran: true,
+      },
+      orderBy: [
+        { periodeTahun: "desc" },
+        { periodeBulan: "desc" },
+        { perjanjian: { unit: { nomor: "asc" } } },
+      ],
+      skip: (currentPage - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  ]);
 
   const totalPages = Math.ceil(totalFiltered / PAGE_SIZE);
-
-  // Ambil data tagihan paginated
-  const tagihanList = await db.tagihan.findMany({
-    where,
-    include: {
-      perjanjian: {
-        include: {
-          unit: { include: { tower: true } },
-          penghuni: true,
-        },
-      },
-      pembayaran: true,
-    },
-    orderBy: [
-      { periodeTahun: "desc" },
-      { periodeBulan: "desc" },
-      { perjanjian: { unit: { nomor: "asc" } } },
-    ],
-    skip: (currentPage - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
-  });
-
   const totalNominalTagihan = agregatTagihan._sum.jumlah || 0;
-  const totalNominalTerbayar = semuaPembayaranFilter.reduce((sum, p) => sum + p.jumlah, 0);
+  const totalNominalTerbayar = agregatPembayaran._sum.jumlah || 0;
   const totalNominalTunggakan = Math.max(0, totalNominalTagihan - totalNominalTerbayar);
   const persentaseRealisasi =
     totalNominalTagihan > 0

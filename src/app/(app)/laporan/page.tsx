@@ -16,11 +16,60 @@ export const dynamic = "force-dynamic";
 export default async function LaporanPage() {
   const sekarang = new Date();
 
-  // 1. Ambil data untuk Rekap Retribusi per Bulan
-  const semuaTagihan = await db.tagihan.findMany({
-    include: { pembayaran: true },
-    orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }],
-  });
+  // Ambil ketiga dataset laporan secara paralel dengan field projection minimal
+  const [semuaTagihan, tagihanMenunggak, semuaAduan] = await Promise.all([
+    // 1. Rekap Retribusi per Bulan
+    db.tagihan.findMany({
+      select: {
+        periodeTahun: true,
+        periodeBulan: true,
+        jumlah: true,
+        pembayaran: {
+          select: { jumlah: true },
+        },
+      },
+      orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }],
+    }),
+    // 2. Daftar Tunggakan per Unit
+    db.tagihan.findMany({
+      where: { status: { in: ["BELUM_BAYAR", "TERLAMBAT"] } },
+      select: {
+        jumlah: true,
+        pembayaran: {
+          select: { jumlah: true },
+        },
+        perjanjian: {
+          select: {
+            unit: {
+              select: {
+                id: true,
+                nomor: true,
+                lantai: true,
+                tower: { select: { nama: true } },
+              },
+            },
+            penghuni: {
+              select: {
+                id: true,
+                nama: true,
+                noHp: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+    // 3. Rekap Pengaduan per Kategori
+    db.pengaduan.findMany({
+      select: {
+        kategori: true,
+        status: true,
+        batasWaktu: true,
+        tanggalSelesai: true,
+        tanggalLapor: true,
+      },
+    }),
+  ]);
 
   const rekapRetribusiMap: Record<
     string,
@@ -56,20 +105,6 @@ export default async function LaporanPage() {
   }
 
   const rekapRetribusiList = Object.values(rekapRetribusiMap);
-
-  // 2. Ambil data untuk Daftar Tunggakan per Unit
-  const tagihanMenunggak = await db.tagihan.findMany({
-    where: { status: { in: ["BELUM_BAYAR", "TERLAMBAT"] } },
-    include: {
-      pembayaran: true,
-      perjanjian: {
-        include: {
-          unit: { include: { tower: true } },
-          penghuni: true,
-        },
-      },
-    },
-  });
 
   const daftarTunggakanMap: Record<
     string,
@@ -114,8 +149,6 @@ export default async function LaporanPage() {
     (a, b) => b.totalTunggakan - a.totalTunggakan
   );
 
-  // 3. Ambil data untuk Rekap Pengaduan per Kategori
-  const semuaAduan = await db.pengaduan.findMany();
   const kategoriKeys: KategoriAduan[] = [
     "AIR_BERSIH",
     "SANITASI",

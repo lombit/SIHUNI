@@ -46,25 +46,25 @@ export default async function PerjanjianPage({ searchParams }: PerjanjianPagePro
     ];
   }
 
-  const [totalFiltered, totalAktif, totalBerakhir, totalSemua] = await Promise.all([
-    db.perjanjianSewa.count({ where }),
-    db.perjanjianSewa.count({ where: { status: "AKTIF" } }),
-    db.perjanjianSewa.count({ where: { status: "BERAKHIR" } }),
-    db.perjanjianSewa.count(),
-  ]);
+  const [totalFiltered, totalAktif, totalBerakhir, totalSemua, perjanjianList] =
+    await Promise.all([
+      db.perjanjianSewa.count({ where }),
+      db.perjanjianSewa.count({ where: { status: "AKTIF" } }),
+      db.perjanjianSewa.count({ where: { status: "BERAKHIR" } }),
+      db.perjanjianSewa.count(),
+      db.perjanjianSewa.findMany({
+        where,
+        include: {
+          unit: { include: { tower: true } },
+          penghuni: true,
+        },
+        orderBy: [{ status: "asc" }, { id: "desc" }],
+        skip: (currentPage - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+      }),
+    ]);
 
   const totalPages = Math.ceil(totalFiltered / PAGE_SIZE);
-
-  const perjanjianList = await db.perjanjianSewa.findMany({
-    where,
-    include: {
-      unit: { include: { tower: true } },
-      penghuni: true,
-    },
-    orderBy: [{ status: "asc" }, { id: "desc" }],
-    skip: (currentPage - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
-  });
 
   return (
     <div className="space-y-6">

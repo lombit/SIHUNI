@@ -63,32 +63,38 @@ export default async function PengaduanPage({ searchParams }: PengaduanPageProps
     ];
   }
 
-  const [totalFiltered, totalSemua, totalBaru, totalDiproses, totalSelesai, totalOverdue] =
-    await Promise.all([
-      db.pengaduan.count({ where }),
-      db.pengaduan.count(),
-      db.pengaduan.count({ where: { status: "BARU" } }),
-      db.pengaduan.count({ where: { status: "DIPROSES" } }),
-      db.pengaduan.count({ where: { status: "SELESAI" } }),
-      db.pengaduan.count({
-        where: {
-          status: { not: "SELESAI" },
-          batasWaktu: { lt: sekarang },
-        },
-      }),
-    ]);
+  const [
+    totalFiltered,
+    totalSemua,
+    totalBaru,
+    totalDiproses,
+    totalSelesai,
+    totalOverdue,
+    pengaduanList,
+  ] = await Promise.all([
+    db.pengaduan.count({ where }),
+    db.pengaduan.count(),
+    db.pengaduan.count({ where: { status: "BARU" } }),
+    db.pengaduan.count({ where: { status: "DIPROSES" } }),
+    db.pengaduan.count({ where: { status: "SELESAI" } }),
+    db.pengaduan.count({
+      where: {
+        status: { not: "SELESAI" },
+        batasWaktu: { lt: sekarang },
+      },
+    }),
+    db.pengaduan.findMany({
+      where,
+      include: {
+        unit: { include: { tower: true } },
+      },
+      orderBy: [{ tanggalLapor: "desc" }],
+      skip: (currentPage - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  ]);
 
   const totalPages = Math.ceil(totalFiltered / PAGE_SIZE);
-
-  const pengaduanList = await db.pengaduan.findMany({
-    where,
-    include: {
-      unit: { include: { tower: true } },
-    },
-    orderBy: [{ tanggalLapor: "desc" }],
-    skip: (currentPage - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
-  });
 
   return (
     <div className="space-y-6">

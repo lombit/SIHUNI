@@ -55,37 +55,45 @@ export default async function UnitPage({ searchParams }: UnitPageProps) {
     where.nomor = { contains: queryFilter };
   }
 
-  // Hitung total data untuk pagination
-  const [totalFilteredUnits, totalUnit, totalDihuni, totalKosong, totalPerbaikan] =
-    await Promise.all([
-      db.unit.count({ where }),
-      db.unit.count(),
-      db.unit.count({ where: { status: "DIHUNI" } }),
-      db.unit.count({ where: { status: "KOSONG" } }),
-      db.unit.count({ where: { status: "PERBAIKAN" } }),
-    ]);
+  // Hitung agregasi status unit dan ambil data dalam 1 round-trip paralel
+  const [totalFilteredUnits, unitStatusCounts, units] = await Promise.all([
+    db.unit.count({ where }),
+    db.unit.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+    }),
+    db.unit.findMany({
+      where,
+      include: {
+        tower: true,
+        perjanjian: {
+          where: { status: "AKTIF" },
+          include: { penghuni: true },
+        },
+      },
+      orderBy: [{ tower: { nama: "asc" } }, { lantai: "asc" }, { nomor: "asc" }],
+      ...(tampilan === "tabel"
+        ? {
+            skip: (currentPage - 1) * PAGE_SIZE,
+            take: PAGE_SIZE,
+          }
+        : {}),
+    }),
+  ]);
+
+  let totalUnit = 0;
+  let totalDihuni = 0;
+  let totalKosong = 0;
+  let totalPerbaikan = 0;
+
+  for (const group of unitStatusCounts) {
+    totalUnit += group._count._all;
+    if (group.status === "DIHUNI") totalDihuni = group._count._all;
+    else if (group.status === "KOSONG") totalKosong = group._count._all;
+    else if (group.status === "PERBAIKAN") totalPerbaikan = group._count._all;
+  }
 
   const totalPages = Math.ceil(totalFilteredUnits / PAGE_SIZE);
-
-  // Ambil data unit (jika tampilan denah, ambil semua filtered; jika tabel, ambil paginated)
-  const units = await db.unit.findMany({
-    where,
-    include: {
-      tower: true,
-      perjanjian: {
-        where: { status: "AKTIF" },
-        include: { penghuni: true },
-      },
-    },
-    orderBy: [{ tower: { nama: "asc" } }, { lantai: "asc" }, { nomor: "asc" }],
-    ...(tampilan === "tabel"
-      ? {
-          skip: (currentPage - 1) * PAGE_SIZE,
-          take: PAGE_SIZE,
-        }
-      : {}),
-  });
-
   const persentaseOkupansi = Math.round((totalDihuni / (totalUnit || 1)) * 100);
 
   // Untuk tampilan denah: kelompokkan berdasarkan Tower lalu Lantai

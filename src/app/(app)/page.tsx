@@ -32,65 +32,127 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  // 1. Sinkronisasi tagihan terlambat secara cepat (memanfaatkan indeks [status, jatuhTempo])
   await perbaruiStatusTerlambat();
 
   const sekarang = new Date();
   const bulanIni = sekarang.getMonth() + 1;
   const tahunIni = sekarang.getFullYear();
 
-  // 1. Data Unit
-  const [totalUnit, totalDihuni, totalKosong, totalPerbaikan] = await Promise.all([
-    db.unit.count(),
-    db.unit.count({ where: { status: "DIHUNI" } }),
-    db.unit.count({ where: { status: "KOSONG" } }),
-    db.unit.count({ where: { status: "PERBAIKAN" } }),
-  ]);
-  const persentaseOkupansi = Math.round((totalDihuni / (totalUnit || 1)) * 100);
-
-  // 2. Data Penghuni
-  const [totalPenghuni, totalAnggota] = await Promise.all([
+  // Eksekusi seluruh pembacaan data secara paralel dalam 1 network round-trip
+  const [
+    unitStatusCounts,
+    totalPenghuni,
+    totalAnggota,
+    tagihanBulanIni,
+    semuaTagihanBelumLunas,
+    totalAduanTerbuka,
+    totalAduanOverdue,
+    top5AduanTerlama,
+  ] = await Promise.all([
+    // Hitung status unit dalam 1 query GROUP BY
+    db.unit.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+    }),
     db.penghuni.count(),
     db.anggotaKeluarga.count(),
+    // Tagihan bulan ini hanya kolom yang diperlukan
+    db.tagihan.findMany({
+      where: {
+        periodeBulan: bulanIni,
+        periodeTahun: tahunIni,
+      },
+      select: {
+        jumlah: true,
+        pembayaran: {
+          select: { jumlah: true },
+        },
+      },
+    }),
+    // Tagihan belum lunas dengan selective projection (tanpa overfetching)
+    db.tagihan.findMany({
+      where: {
+        status: { in: ["BELUM_BAYAR", "TERLAMBAT"] },
+      },
+      select: {
+        jumlah: true,
+        pembayaran: {
+          select: { jumlah: true },
+        },
+        perjanjian: {
+          select: {
+            unitId: true,
+            penghuniId: true,
+            unit: {
+              select: { id: true, nomor: true },
+            },
+            penghuni: {
+              select: { id: true, nama: true, noHp: true },
+            },
+          },
+        },
+      },
+    }),
+    db.pengaduan.count({
+      where: { status: { in: ["BARU", "DIPROSES"] } },
+    }),
+    db.pengaduan.count({
+      where: {
+        status: { not: "SELESAI" },
+        batasWaktu: { lt: sekarang },
+      },
+    }),
+    db.pengaduan.findMany({
+      where: {
+        status: { in: ["BARU", "DIPROSES"] },
+      },
+      select: {
+        id: true,
+        nomorTiket: true,
+        kategori: true,
+        tingkat: true,
+        status: true,
+        uraian: true,
+        batasWaktu: true,
+        tanggalLapor: true,
+        unit: {
+          select: {
+            nomor: true,
+          },
+        },
+      },
+      orderBy: { tanggalLapor: "asc" },
+      take: 5,
+    }),
   ]);
 
-  // 3. Data Retribusi Bulan Berjalan
-  const tagihanBulanIni = await db.tagihan.findMany({
-    where: {
-      periodeBulan: bulanIni,
-      periodeTahun: tahunIni,
-    },
-    include: {
-      pembayaran: true,
-    },
-  });
+  // Ekstraksi hasil GROUP BY Unit
+  let totalUnit = 0;
+  let totalDihuni = 0;
+  let totalKosong = 0;
+  let totalPerbaikan = 0;
 
+  for (const group of unitStatusCounts) {
+    totalUnit += group._count._all;
+    if (group.status === "DIHUNI") totalDihuni = group._count._all;
+    else if (group.status === "KOSONG") totalKosong = group._count._all;
+    else if (group.status === "PERBAIKAN") totalPerbaikan = group._count._all;
+  }
+  const persentaseOkupansi = Math.round((totalDihuni / (totalUnit || 1)) * 100);
+
+  // Perhitungan Keuangan Bulan Berjalan
   let targetBulanIni = 0;
   let realisasiBulanIni = 0;
-
   for (const t of tagihanBulanIni) {
     targetBulanIni += t.jumlah;
     const paid = t.pembayaran.reduce((sum, p) => sum + p.jumlah, 0);
     realisasiBulanIni += paid;
   }
+  const persentaseBulanIni =
+    targetBulanIni > 0 ? Math.round((realisasiBulanIni / targetBulanIni) * 100) : 0;
 
-  const persentaseBulanIni = targetBulanIni > 0 ? Math.round((realisasiBulanIni / targetBulanIni) * 100) : 0;
-
-  // 4. Total Tunggakan Keseluruhan
-  const semuaTagihanBelumLunas = await db.tagihan.findMany({
-    where: {
-      status: { in: ["BELUM_BAYAR", "TERLAMBAT"] },
-    },
-    include: {
-      pembayaran: true,
-      perjanjian: {
-        include: {
-          unit: true,
-          penghuni: true,
-        },
-      },
-    },
-  });
-
+  // Perhitungan Tunggakan Keseluruhan
   let totalTunggakanSemua = 0;
   const tunggakanPerPenghuni: Record<
     string,
@@ -129,29 +191,6 @@ export default async function DashboardPage() {
   const top5Tunggakan = Object.values(tunggakanPerPenghuni)
     .sort((a, b) => b.totalTunggakan - a.totalTunggakan)
     .slice(0, 5);
-
-  // 5. Data Pengaduan
-  const [totalAduanTerbuka, totalAduanOverdue, top5AduanTerlama] = await Promise.all([
-    db.pengaduan.count({
-      where: { status: { in: ["BARU", "DIPROSES"] } },
-    }),
-    db.pengaduan.count({
-      where: {
-        status: { not: "SELESAI" },
-        batasWaktu: { lt: sekarang },
-      },
-    }),
-    db.pengaduan.findMany({
-      where: {
-        status: { in: ["BARU", "DIPROSES"] },
-      },
-      include: {
-        unit: { include: { tower: true } },
-      },
-      orderBy: { tanggalLapor: "asc" },
-      take: 5,
-    }),
-  ]);
 
   return (
     <div className="space-y-6">

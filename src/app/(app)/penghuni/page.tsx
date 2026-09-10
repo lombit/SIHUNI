@@ -45,32 +45,32 @@ export default async function PenghuniPage({ searchParams }: PenghuniPageProps) 
     where.berkasLengkap = false;
   }
 
-  const [totalFiltered, totalPenghuni, totalBerkasLengkap, totalAnggota] = await Promise.all([
-    db.penghuni.count({ where }),
-    db.penghuni.count(),
-    db.penghuni.count({ where: { berkasLengkap: true } }),
-    db.anggotaKeluarga.count(),
-  ]);
-
-  const totalPages = Math.ceil(totalFiltered / PAGE_SIZE);
-
-  const penghuniList = await db.penghuni.findMany({
-    where,
-    include: {
-      anggota: true,
-      perjanjian: {
-        where: { status: "AKTIF" },
+  const [totalFiltered, totalPenghuni, totalBerkasLengkap, totalAnggota, penghuniList] =
+    await Promise.all([
+      db.penghuni.count({ where }),
+      db.penghuni.count(),
+      db.penghuni.count({ where: { berkasLengkap: true } }),
+      db.anggotaKeluarga.count(),
+      db.penghuni.findMany({
+        where,
         include: {
-          unit: {
-            include: { tower: true },
+          anggota: true,
+          perjanjian: {
+            where: { status: "AKTIF" },
+            include: {
+              unit: {
+                include: { tower: true },
+              },
+            },
           },
         },
-      },
-    },
-    orderBy: { nama: "asc" },
-    skip: (currentPage - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
-  });
+        orderBy: { nama: "asc" },
+        skip: (currentPage - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+      }),
+    ]);
+
+  const totalPages = Math.ceil(totalFiltered / PAGE_SIZE);
 
   return (
     <div className="space-y-6">
