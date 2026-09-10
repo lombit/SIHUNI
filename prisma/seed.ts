@@ -79,81 +79,60 @@ async function main() {
 
   console.log("✓ 3 Akun Pengguna dibuat (admin, petugas, pimpinan - password: sihuni123)");
 
-  // 3. Buat 2 Tower & Tepat 5 Unit Hunian
-  // Variasi: 3 Dihuni, 1 Kosong, 1 Perbaikan
-  const towerA = await prisma.tower.create({
-    data: { nama: "Tower A", jumlahLantai: 5 },
-  });
+  // 3. Buat 2 Tower & Total Tepat 200 Unit Hunian (Tower A: 100 Unit, Tower B: 100 Unit)
+  const tarifLantai: Record<number, number> = {
+    1: 350000,
+    2: 325000,
+    3: 300000,
+    4: 275000,
+    5: 250000,
+  };
 
-  const towerB = await prisma.tower.create({
-    data: { nama: "Tower B", jumlahLantai: 5 },
-  });
+  const towersData = [
+    { nama: "Tower A", kode: "A" },
+    { nama: "Tower B", kode: "B" },
+  ];
 
-  const unitA101 = await prisma.unit.create({
-    data: {
-      towerId: towerA.id,
-      lantai: 1,
-      nomor: "A-101",
-      tipe: "Tipe 24",
-      luas: 24.0,
-      tarifSewa: 350000,
-      status: "DIHUNI",
-    },
-  });
+  const unitMap: Record<string, any> = {};
 
-  const unitA102 = await prisma.unit.create({
-    data: {
-      towerId: towerA.id,
-      lantai: 1,
-      nomor: "A-102",
-      tipe: "Tipe 24",
-      luas: 24.0,
-      tarifSewa: 350000,
-      status: "DIHUNI",
-    },
-  });
+  for (const t of towersData) {
+    const tower = await prisma.tower.create({
+      data: { nama: t.nama, jumlahLantai: 5 },
+    });
 
-  const unitA201 = await prisma.unit.create({
-    data: {
-      towerId: towerA.id,
-      lantai: 2,
-      nomor: "A-201",
-      tipe: "Tipe 24",
-      luas: 24.0,
-      tarifSewa: 325000,
-      status: "DIHUNI",
-    },
-  });
+    for (let lantai = 1; lantai <= 5; lantai++) {
+      for (let no = 1; no <= 20; no++) {
+        const noFormatted = no < 10 ? `0${no}` : `${no}`;
+        const nomorUnit = `${t.kode}-${lantai}${noFormatted}`;
+        const unit = await prisma.unit.create({
+          data: {
+            towerId: tower.id,
+            lantai,
+            nomor: nomorUnit,
+            tipe: "Tipe 24",
+            luas: 24.0,
+            tarifSewa: tarifLantai[lantai],
+            status: "KOSONG",
+          },
+        });
+        unitMap[nomorUnit] = unit;
+      }
+    }
+  }
 
-  const unitB101 = await prisma.unit.create({
-    data: {
-      towerId: towerB.id,
-      lantai: 1,
-      nomor: "B-101",
-      tipe: "Tipe 24",
-      luas: 24.0,
-      tarifSewa: 350000,
-      status: "KOSONG", // Siap untuk ditest penerbitan sewa baru
-    },
-  });
+  // Set unit yang dihuni aktif
+  await prisma.unit.update({ where: { id: unitMap["A-101"].id }, data: { status: "DIHUNI" } });
+  await prisma.unit.update({ where: { id: unitMap["A-102"].id }, data: { status: "DIHUNI" } });
+  await prisma.unit.update({ where: { id: unitMap["A-201"].id }, data: { status: "DIHUNI" } });
+  await prisma.unit.update({ where: { id: unitMap["B-101"].id }, data: { status: "DIHUNI" } });
 
-  const unitB201 = await prisma.unit.create({
-    data: {
-      towerId: towerB.id,
-      lantai: 2,
-      nomor: "B-201",
-      tipe: "Tipe 24",
-      luas: 24.0,
-      tarifSewa: 325000,
-      status: "PERBAIKAN", // Siap untuk ditest pengelolaan unit & pemeliharaan
-    },
-  });
+  // Set variasi unit yang sedang perbaikan
+  await prisma.unit.update({ where: { id: unitMap["B-201"].id }, data: { status: "PERBAIKAN" } });
+  await prisma.unit.update({ where: { id: unitMap["B-202"].id }, data: { status: "PERBAIKAN" } });
 
-  console.log("✓ 5 Unit Hunian dibuat (3 Dihuni, 1 Kosong, 1 Perbaikan)");
+  console.log("✓ 2 Tower dan 200 Unit Hunian berhasil dibuat (4 Dihuni, 2 Perbaikan, 194 Kosong)");
 
-  // 4. Buat Tepat 5 Data Penghuni
-  // Penghuni 1 - 3: Menghuni unit aktif
-  // Penghuni 4 - 5: Calon penghuni terdaftar (siap disewakan ke unit kosong)
+  // 4. Buat Data Penghuni (Termasuk Ivan Resdian)
   const penghuni1 = await prisma.penghuni.create({
     data: {
       nik: "3214011508850001",
@@ -224,6 +203,23 @@ async function main() {
 
   const penghuni4 = await prisma.penghuni.create({
     data: {
+      nik: "3204090302000003",
+      nomorKk: "3204090302000003",
+      nama: "Ivan Resdian",
+      tempatLahir: "Bandung",
+      tanggalLahir: new Date(2000, 1, 3),
+      jenisKelamin: "L",
+      statusKawin: "Belum Kawin",
+      pekerjaan: "Pegawai Negeri Sipil",
+      penghasilan: 5500000,
+      noHp: "082119931290",
+      alamatKtp: "Taman Kopo Indah Blok O 109, Bandung",
+      berkasLengkap: true,
+    },
+  });
+
+  const penghuni5 = await prisma.penghuni.create({
+    data: {
       nik: "3214010811900004",
       nomorKk: "3214012001050004",
       nama: "Cecep Mulyana",
@@ -236,15 +232,10 @@ async function main() {
       noHp: "087812340004",
       alamatKtp: "Sindangkasih RT 01/03, Purwakarta",
       berkasLengkap: true,
-      anggota: {
-        create: [
-          { nama: "Rina Marlina", hubungan: "Istri", usia: 31 },
-        ],
-      },
     },
   });
 
-  const penghuni5 = await prisma.penghuni.create({
+  const penghuni6 = await prisma.penghuni.create({
     data: {
       nik: "3214016509950005",
       nomorKk: "3214012001050005",
@@ -261,9 +252,9 @@ async function main() {
     },
   });
 
-  console.log("✓ 5 Data Penghuni dibuat (3 aktif menghuni, 2 pemohon baru)");
+  console.log("✓ Data Penghuni berhasil dibuat");
 
-  // 5. Buat 3 Perjanjian Sewa Aktif
+  // 5. Buat 4 Perjanjian Sewa Aktif
   const sekarang = new Date();
   const tahunSekarang = sekarang.getFullYear();
   const tglMulai = new Date(tahunSekarang, 0, 1);
@@ -272,11 +263,11 @@ async function main() {
   const sewa1 = await prisma.perjanjianSewa.create({
     data: {
       nomor: `SPS/${tahunSekarang}/0001`,
-      unitId: unitA101.id,
+      unitId: unitMap["A-101"].id,
       penghuniId: penghuni1.id,
       tanggalMulai: tglMulai,
       tanggalBerakhir: tglBerakhir,
-      tarifBulanan: unitA101.tarifSewa,
+      tarifBulanan: unitMap["A-101"].tarifSewa,
       status: "AKTIF",
     },
   });
@@ -284,11 +275,11 @@ async function main() {
   const sewa2 = await prisma.perjanjianSewa.create({
     data: {
       nomor: `SPS/${tahunSekarang}/0002`,
-      unitId: unitA102.id,
+      unitId: unitMap["A-102"].id,
       penghuniId: penghuni2.id,
       tanggalMulai: tglMulai,
       tanggalBerakhir: tglBerakhir,
-      tarifBulanan: unitA102.tarifSewa,
+      tarifBulanan: unitMap["A-102"].tarifSewa,
       status: "AKTIF",
     },
   });
@@ -296,18 +287,30 @@ async function main() {
   const sewa3 = await prisma.perjanjianSewa.create({
     data: {
       nomor: `SPS/${tahunSekarang}/0003`,
-      unitId: unitA201.id,
+      unitId: unitMap["A-201"].id,
       penghuniId: penghuni3.id,
       tanggalMulai: tglMulai,
       tanggalBerakhir: tglBerakhir,
-      tarifBulanan: unitA201.tarifSewa,
+      tarifBulanan: unitMap["A-201"].tarifSewa,
       status: "AKTIF",
     },
   });
 
-  console.log("✓ 3 Perjanjian Sewa Aktif dibuat");
+  const sewa4 = await prisma.perjanjianSewa.create({
+    data: {
+      nomor: `SPS/${tahunSekarang}/0004`,
+      unitId: unitMap["B-101"].id,
+      penghuniId: penghuni4.id,
+      tanggalMulai: new Date(tahunSekarang, sekarang.getMonth(), 10),
+      tanggalBerakhir: new Date(tahunSekarang + 1, sekarang.getMonth(), 10),
+      tarifBulanan: unitMap["B-101"].tarifSewa,
+      status: "AKTIF",
+    },
+  });
 
-  // 6. Buat Tepat 5 Data Tagihan Retribusi (Representasi Lengkap: Lunas, Belum Bayar, Terlambat SP-1 s/d SP-3)
+  console.log("✓ 4 Perjanjian Sewa Aktif dibuat");
+
+  // 6. Buat Data Tagihan Retribusi (Representasi Lengkap: Lunas, Belum Bayar, Terlambat SP-1 s/d SP-3)
   const bulanSekarang = sekarang.getMonth() + 1;
 
   // Tagihan 1: Unit A-101 (Asep Sunandar) - LUNAS (Lengkap dengan Bukti Kuitansi & STS Kasda)
@@ -385,14 +388,26 @@ async function main() {
     },
   });
 
-  console.log("✓ 5 Tagihan Retribusi dibuat (1 Lunas, 1 Belum Bayar, 3 Terlambat SP-3)");
+  // Tagihan 6: Unit B-101 (Ivan Resdian) - BELUM_BAYAR (Bulan ini, siap ditest bayar / kirim WA)
+  await prisma.tagihan.create({
+    data: {
+      perjanjianId: sewa4.id,
+      periodeBulan: bulanSekarang,
+      periodeTahun: tahunSekarang,
+      jumlah: sewa4.tarifBulanan,
+      jatuhTempo: new Date(tahunSekarang, bulanSekarang - 1, 20, 23, 59, 59),
+      status: "BELUM_BAYAR",
+    },
+  });
 
-  // 7. Buat Tepat 5 Data Pengaduan Gangguan (Variasi Kategori, Status, dan SLA)
+  console.log("✓ Tagihan Retribusi dibuat (Lunas, Belum Bayar, Terlambat SP-3, dan Tagihan Ivan)");
+
+  // 7. Buat 5 Data Pengaduan Gangguan (Variasi Kategori, Status, dan SLA)
   const tglAduan1 = addDays(sekarang, -4); // Overdue SLA (4 hari lalu, tingkat BERAT max 2 hari kerja)
   await prisma.pengaduan.create({
     data: {
       nomorTiket: `ADU-${tahunSekarang}-0001`,
-      unitId: unitA101.id,
+      unitId: unitMap["A-101"].id,
       namaPelapor: penghuni1.nama,
       noHp: penghuni1.noHp,
       kategori: "AIR_BERSIH",
@@ -411,7 +426,7 @@ async function main() {
   await prisma.pengaduan.create({
     data: {
       nomorTiket: `ADU-${tahunSekarang}-0002`,
-      unitId: unitA102.id,
+      unitId: unitMap["A-102"].id,
       namaPelapor: penghuni2.nama,
       noHp: penghuni2.noHp,
       kategori: "LISTRIK",
@@ -430,7 +445,7 @@ async function main() {
   await prisma.pengaduan.create({
     data: {
       nomorTiket: `ADU-${tahunSekarang}-0003`,
-      unitId: unitA201.id,
+      unitId: unitMap["A-201"].id,
       namaPelapor: penghuni3.nama,
       noHp: penghuni3.noHp,
       kategori: "SANITASI",
@@ -449,7 +464,7 @@ async function main() {
   await prisma.pengaduan.create({
     data: {
       nomorTiket: `ADU-${tahunSekarang}-0004`,
-      unitId: unitA101.id,
+      unitId: unitMap["A-101"].id,
       namaPelapor: penghuni1.nama,
       noHp: penghuni1.noHp,
       kategori: "BANGUNAN",
@@ -468,7 +483,7 @@ async function main() {
   await prisma.pengaduan.create({
     data: {
       nomorTiket: `ADU-${tahunSekarang}-0005`,
-      unitId: unitA102.id,
+      unitId: unitMap["A-102"].id,
       namaPelapor: penghuni2.nama,
       noHp: penghuni2.noHp,
       kategori: "KEBERSIHAN",
@@ -492,16 +507,16 @@ async function main() {
       entitas: "Sistem",
       entitasId: userAdmin.id,
       aksi: "BUAT",
-      sesudah: JSON.stringify({ keterangan: "Inisialisasi dataset ringkas 5 sampel per entitas untuk pengujian sistem SIHUNI" }),
+      sesudah: JSON.stringify({ keterangan: "Inisialisasi 200 unit rusunawa dan dataset ringkas untuk sistem SIHUNI" }),
     },
   });
 
   console.log("\n=======================================================");
-  console.log("✓ SEED DATA RINGKAS BERHASIL DIJALANKAN!");
-  console.log("  - Unit Hunian       : 5 unit (A-101, A-102, A-201, B-101, B-201)");
-  console.log("  - Penghuni          : 5 penghuni (Asep, Siti, Budi, Cecep, Dewi)");
-  console.log("  - Perjanjian Sewa   : 3 perjanjian aktif");
-  console.log("  - Tagihan Retribusi : 5 tagihan (Lunas, Belum Bayar, Terlambat SP-3)");
+  console.log("✓ SEED DATA 200 UNIT BERHASIL DIJALANKAN!");
+  console.log("  - Unit Hunian       : 200 unit (Tower A: 100, Tower B: 100)");
+  console.log("  - Penghuni          : Asep, Siti, Budi, Ivan Resdian, Cecep, Dewi");
+  console.log("  - Perjanjian Sewa   : 4 perjanjian aktif");
+  console.log("  - Tagihan Retribusi : 6 tagihan (Lunas, Belum Bayar, Terlambat SP-3)");
   console.log("  - Pengaduan Tiket   : 5 tiket (SLA Merah, Diproses, Baru, 2 Selesai)");
   console.log("  - Akun Login        : admin / petugas / pimpinan (sandi: sihuni123)");
   console.log("=======================================================\n");
