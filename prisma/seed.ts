@@ -17,7 +17,18 @@ function hitungSLAHariKerja(tanggalMulai: Date, tingkat: string): Date {
 }
 
 async function main() {
-  console.log("Memulai proses pembersihan dan seeding data ringkas (5 data)...");
+  console.log("Memulai inisialisasi / seeding data ringkas (5 data)...");
+
+  // Jika database sudah memiliki data dan bukan mode force seed, jangan hapus data
+  try {
+    const userCount = await prisma.user.count();
+    if (userCount > 0 && process.env.FORCE_SEED !== "true") {
+      console.log(`✓ Database sudah memiliki ${userCount} akun pengguna. Seeding dilewati untuk menjaga integritas data produksi.`);
+      return;
+    }
+  } catch (e) {
+    // Tabel mungkin belum terbentuk, lanjutkan
+  }
 
   // 1. Bersihkan seluruh data sebelumnya
   await prisma.logAudit.deleteMany();
