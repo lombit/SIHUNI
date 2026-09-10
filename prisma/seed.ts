@@ -95,6 +95,8 @@ async function main() {
 
   const unitMap: Record<string, any> = {};
 
+  const unitListToInsert: any[] = [];
+
   for (const t of towersData) {
     const tower = await prisma.tower.create({
       data: { nama: t.nama, jumlahLantai: 5 },
@@ -104,20 +106,24 @@ async function main() {
       for (let no = 1; no <= 20; no++) {
         const noFormatted = no < 10 ? `0${no}` : `${no}`;
         const nomorUnit = `${t.kode}-${lantai}${noFormatted}`;
-        const unit = await prisma.unit.create({
-          data: {
-            towerId: tower.id,
-            lantai,
-            nomor: nomorUnit,
-            tipe: "Tipe 24",
-            luas: 24.0,
-            tarifSewa: tarifLantai[lantai],
-            status: "KOSONG",
-          },
+        unitListToInsert.push({
+          towerId: tower.id,
+          lantai,
+          nomor: nomorUnit,
+          tipe: "Tipe 24",
+          luas: 24.0,
+          tarifSewa: tarifLantai[lantai],
+          status: "KOSONG",
         });
-        unitMap[nomorUnit] = unit;
       }
     }
+  }
+
+  await prisma.unit.createMany({ data: unitListToInsert });
+
+  const allUnits = await prisma.unit.findMany();
+  for (const u of allUnits) {
+    unitMap[u.nomor] = u;
   }
 
   // Set unit yang dihuni aktif
