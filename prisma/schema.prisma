@@ -1,0 +1,140 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Catatan: Pada SQLite, enum dipetakan sebagai String dan divalidasi pada TypeScript/Zod layer.
+// Jika beralih ke PostgreSQL di masa produksi, tipe dapat diubah kembali ke native enum.
+
+model User {
+  id           String  @id @default(cuid())
+  nama         String
+  username     String  @unique
+  passwordHash String
+  peran        String  @default("PETUGAS") // "ADMIN" | "PETUGAS" | "PIMPINAN"
+  aktif        Boolean @default(true)
+}
+
+model Tower {
+  id           String @id @default(cuid())
+  nama         String @unique // "Tower A"
+  jumlahLantai Int
+  unit         Unit[]
+}
+
+model Unit {
+  id         String          @id @default(cuid())
+  towerId    String
+  tower      Tower           @relation(fields: [towerId], references: [id])
+  lantai     Int
+  nomor      String // "A-301"
+  tipe       String // "Tipe 24"
+  luas       Float // m2
+  tarifSewa  Int // rupiah per bulan
+  status     String          @default("KOSONG") // "KOSONG" | "DIHUNI" | "PERBAIKAN"
+  perjanjian PerjanjianSewa[]
+  pengaduan  Pengaduan[]
+
+  @@unique([towerId, nomor])
+}
+
+model Penghuni {
+  id            String            @id @default(cuid())
+  nik           String            @unique // 16 digit
+  nomorKk       String?
+  nama          String
+  tempatLahir   String?
+  tanggalLahir  DateTime?
+  jenisKelamin  String? // "L" | "P"
+  statusKawin   String?
+  pekerjaan     String?
+  penghasilan   Int?
+  noHp          String // wajib
+  alamatKtp     String?
+  berkasLengkap Boolean           @default(false)
+  anggota       AnggotaKeluarga[]
+  perjanjian    PerjanjianSewa[]
+}
+
+model AnggotaKeluarga {
+  id         String   @id @default(cuid())
+  penghuniId String
+  penghuni   Penghuni @relation(fields: [penghuniId], references: [id], onDelete: Cascade)
+  nik        String?
+  nama       String
+  hubungan   String
+  usia       Int?
+}
+
+model PerjanjianSewa {
+  id              String     @id @default(cuid())
+  nomor           String     @unique
+  unitId          String
+  unit            Unit       @relation(fields: [unitId], references: [id])
+  penghuniId      String
+  penghuni        Penghuni   @relation(fields: [penghuniId], references: [id])
+  tanggalMulai    DateTime
+  tanggalBerakhir DateTime
+  tarifBulanan    Int
+  status          String     @default("AKTIF") // "AKTIF" | "BERAKHIR" | "DIBATALKAN"
+  tagihan         Tagihan[]
+}
+
+model Tagihan {
+  id           String         @id @default(cuid())
+  perjanjianId String
+  perjanjian   PerjanjianSewa @relation(fields: [perjanjianId], references: [id])
+  periodeBulan Int // 1-12
+  periodeTahun Int
+  jumlah       Int
+  jatuhTempo   DateTime
+  status       String         @default("BELUM_BAYAR") // "BELUM_BAYAR" | "LUNAS" | "TERLAMBAT"
+  pembayaran   Pembayaran[]
+
+  @@unique([perjanjianId, periodeBulan, periodeTahun])
+}
+
+model Pembayaran {
+  id           String    @id @default(cuid())
+  tagihanId    String
+  tagihan      Tagihan   @relation(fields: [tagihanId], references: [id])
+  tanggalBayar DateTime
+  jumlah       Int
+  nomorBukti   String
+  dicatatOleh  String // User.id
+  tanggalSetor DateTime? // penyetoran ke kas daerah
+  nomorSetoran String?
+}
+
+model Pengaduan {
+  id             String    @id @default(cuid())
+  nomorTiket     String    @unique // ADU-2026-0001
+  unitId         String
+  unit           Unit      @relation(fields: [unitId], references: [id])
+  namaPelapor    String
+  noHp           String
+  kategori       String // "AIR_BERSIH" | "SANITASI" | "LISTRIK" | "KEBERSIHAN" | "KEAMANAN" | "BANGUNAN" | "LAINNYA"
+  tingkat        String // "RINGAN" | "SEDANG" | "BERAT"
+  uraian         String
+  tanggalLapor   DateTime  @default(now())
+  batasWaktu     DateTime // dihitung dari SLA per tingkat
+  status         String    @default("BARU") // "BARU" | "DIPROSES" | "SELESAI" | "DITERUSKAN" | "TIDAK_DAPAT_DITANGANI"
+  petugasId      String?
+  tindakan       String?
+  tanggalSelesai DateTime?
+}
+
+model LogAudit {
+  id        String   @id @default(cuid())
+  userId    String
+  entitas   String // "Penghuni", "Tagihan", ...
+  entitasId String
+  aksi      String // "BUAT" | "UBAH" | "HAPUS"
+  sebelum   String? // JSON
+  sesudah   String? // JSON
+  waktu     DateTime @default(now())
+}
