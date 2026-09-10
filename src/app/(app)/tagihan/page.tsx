@@ -36,9 +36,6 @@ interface TagihanPageProps {
 const PAGE_SIZE = 25;
 
 export default async function TagihanPage({ searchParams }: TagihanPageProps) {
-  // Jalankan auto-update status tagihan yang terlambat
-  await perbaruiStatusTerlambat();
-
   const params = await searchParams;
   const sekarang = new Date();
   const tahunIni = sekarang.getFullYear();
@@ -78,6 +75,7 @@ export default async function TagihanPage({ searchParams }: TagihanPageProps) {
 
   // Hitung total, agregat keuangan SQL, dan ambil data paginated dalam 1 round-trip paralel
   const [
+    _syncStatus,
     totalFiltered,
     agregatTagihan,
     agregatPembayaran,
@@ -85,6 +83,7 @@ export default async function TagihanPage({ searchParams }: TagihanPageProps) {
     totalTerlambatCount,
     tagihanList,
   ] = await Promise.all([
+    perbaruiStatusTerlambat(),
     db.tagihan.count({ where }),
     db.tagihan.aggregate({
       where,

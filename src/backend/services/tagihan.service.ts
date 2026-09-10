@@ -2,8 +2,19 @@ import db from "../db";
 import { catatAudit } from "../audit";
 import { BayarInput } from "../validations/tagihan.schema";
 
-export async function perbaruiStatusTerlambat() {
+let terakhirSinkronisasi = 0;
+const INTERVAL_SINKRONISASI_MS = 10 * 60 * 1000; // Cukup periksa setiap 10 menit
+
+export async function perbaruiStatusTerlambat(paksa: boolean = false) {
   const sekarang = new Date();
+  const nowMs = sekarang.getTime();
+
+  // Mencegah query write berulang pada setiap page render
+  if (!paksa && nowMs - terakhirSinkronisasi < INTERVAL_SINKRONISASI_MS) {
+    return 0;
+  }
+  terakhirSinkronisasi = nowMs;
+
   try {
     const hasil = await db.tagihan.updateMany({
       where: {

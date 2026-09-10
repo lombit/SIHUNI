@@ -32,15 +32,13 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  // 1. Sinkronisasi tagihan terlambat secara cepat (memanfaatkan indeks [status, jatuhTempo])
-  await perbaruiStatusTerlambat();
-
   const sekarang = new Date();
   const bulanIni = sekarang.getMonth() + 1;
   const tahunIni = sekarang.getFullYear();
 
-  // Eksekusi seluruh pembacaan data secara paralel dalam 1 network round-trip
+  // Eksekusi seluruh sinkronisasi dan pembacaan data secara paralel dalam 1 network round-trip
   const [
+    _sinkronisasi,
     unitStatusCounts,
     totalPenghuni,
     totalAnggota,
@@ -50,6 +48,7 @@ export default async function DashboardPage() {
     totalAduanOverdue,
     top5AduanTerlama,
   ] = await Promise.all([
+    perbaruiStatusTerlambat(),
     // Hitung status unit dalam 1 query GROUP BY
     db.unit.groupBy({
       by: ["status"],
